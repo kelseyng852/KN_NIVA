@@ -1,4 +1,4 @@
-Sys.setenv(lang = "en_US")
+Sys.setenv(lang = "en_UK")
 
 library(readxl) # reads Excel file
 library(dplyr) # Data manipulation
