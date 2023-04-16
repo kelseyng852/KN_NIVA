@@ -19,7 +19,7 @@ my_data <- my_data[,-length(my_data)]
 
 row_data <- my_data %>% 
   select(!1:18) #Ignores columns 1-18, takes only the 
-                #columns containing metadata to be transposed
+#columns containing metadata to be transposed
 row_data <- t(row_data) # transpose data 
 
 #### Keep only columns containing metadata, remove results ####
@@ -28,13 +28,13 @@ row_data <- t(row_data) # transpose data
 row_data <- as.data.frame(row_data) %>% 
   
   select(1:10) # selects only what it has to be transposed 
-             
-  
+
+
 
 #### Create column names ####
 
 colnames(row_data) <- c("SITE_NAME","SITE_CODE","ExtMet", "EnvCom",
-                           "COUNTRY","LATITUDE","LONGITUDE", "ENTERED_DATE", "SUBSAMPLE", "SAMPLE_SPECIES")
+                        "COUNTRY","LATITUDE","LONGITUDE", "ENTERED_DATE", "SUBSAMPLE", "SAMPLE_SPECIES")
 
 #### Convert SAMPLE_DATE back to date format ####
 
@@ -54,7 +54,7 @@ row_data <- row_data %>%
          SAMPLE_TISSUE = "Not relevant",
          SAMPLE_MATRIX = replace(EnvCom,
                                  EnvCom == "Groundwater",
-                                 "Other (add  SAMPLE_REMARK)"),
+                                 "Groundwater"),
          ENVIRON_COMPARTMENT = replace(EnvCom,
                                        EnvCom == "Groundwater",
                                        "Fresh water"),
@@ -76,10 +76,10 @@ row_data <- row_data %>%
                             "Aqueous"),
          FRACTION = replace(FRACTION, 
                             FRACTION == "Biota", 
-                            "Not Relevant"),
+                            "Total"),
          FRACTION = replace(FRACTION, 
                             FRACTION == "Sediment", 
-                            "Not Relevant"),
+                            "Total"),
          MEASURED_UNIT = replace(EnvCom, EnvCom == "Groundwater", "ng/L"),
          MEASURED_UNIT = replace(MEASURED_UNIT, MEASURED_UNIT == "River water", 
                                  "ng/L"),
@@ -95,6 +95,7 @@ row_data <- row_data %>%
 row_data$SAMPLE_REMARK<-gsub("Biota","",row_data$SAMPLE_REMARK)
 row_data$SAMPLE_REMARK<-gsub("Sediment","",row_data$SAMPLE_REMARK)
 row_data$SAMPLE_REMARK<-gsub("River water","",row_data$SAMPLE_REMARK)
+row_data$SAMPLE_REMARK<-gsub("Groundwater","",row_data$SAMPLE_REMARK)
 row_data$SAMPLE_MATRIX<-gsub("Influent wastewater","Wastewater",row_data$SAMPLE_MATRIX)
 row_data$SAMPLE_MATRIX<-gsub("Effluent wastewater","Wastewater",row_data$SAMPLE_MATRIX)
 
@@ -102,8 +103,8 @@ row_data <- row_data  %>%
   mutate(LOQ_UNIT = MEASURED_UNIT,
          LOD_UNIT = MEASURED_UNIT)
 
-  
- 
+
+
 #### Call file with header ####
 
 my_data_Header <- read_excel("Source_file_JDS4_target_screening.xlsx")
@@ -126,7 +127,8 @@ melting_data = melting_data %>%
          MEASURED_VALUE = value) 
 
 melting_data = melting_data %>% 
-  mutate(ANALYTICAL_PROTOCOL_ID = 5,
+  mutate(MEASURED_FLAG = MEASURED_VALUE,
+         ANALYTICAL_PROTOCOL_ID = "5",
          DATA_TYPE = "Stressor",
          MEASURED_CATEGORY = "External",
          MEASURED_TYPE = "Concentration",
@@ -141,21 +143,21 @@ final <- merge(melting_data, row_data, by = "SITE_NAME")
 
 final <- final %>% 
   mutate(CAMPAIGN = "JDS4", .before = 1)
-  
+
 final <- final %>% 
   rename(DATA_TYPE_SUB = categs,
          STRESSOR_NAME = Name,
          ORGANISATION = Contributor) 
 
 
-  
+
 final <- final %>% 
   mutate(SAMPLING_METHOD = replace(SAMPLING_METHOD,
                                    ORGANISATION == "JRC",
                                    "LVSPE"),
          SAMPLING_METHOD = replace(SAMPLING_METHOD,
                                    ORGANISATION %in% c("LfU", "UoA"),
-                                   "SPE"),
+                                   "LVSPE"),
          SAMPLING_METHOD = replace(SAMPLING_METHOD, 
                                    EnvCom == "Biota", 
                                    "Biopsy"),
@@ -163,39 +165,43 @@ final <- final %>%
                                    EnvCom == "Sediment", 
                                    "No information/not reported"))
 
+final$MEASURED_FLAG = replace(x = final$MEASURED_VALUE, 
+                              list =  !final$MEASURED_VALUE %in% c("<LOD", "<LOQ"), 
+                              values =  "")
+
+
 final <- final %>% 
   mutate(EXTRACTION_METHOD = replace(SAMPLING_METHOD,
                                      SAMPLING_METHOD == "LVSPE",
                                      "SPE Oasis HLB"),
-         EXTRACTION_METHOD = replace(EXTRACTION_METHOD,
-                                   ORGANISATION != "LVSPE",
-                                   "Other (add to SAMPLING_COMMENT)"),
+         EXTRACTION_METHOD = replace(SAMPLING_METHOD,
+                                     SAMPLING_METHOD != "LVSPE",
+                                     "Methanol extraction"),
          
          EXTRACTION_PROTOCOL_ID = replace(EnvCom,
-                                   ORGANISATION == "UoA",
-                                   "2"),
+                                          ORGANISATION == "UoA",
+                                          "2"),
          EXTRACTION_PROTOCOL_ID = replace(EXTRACTION_PROTOCOL_ID,
-                                   ORGANISATION %in% c("LfU", "JRC"),
-                                   "5"),
+                                          ORGANISATION %in% c("LfU", "JRC"),
+                                          "5"),
          EXTRACTION_PROTOCOL_ID = replace(EXTRACTION_PROTOCOL_ID, 
-                                   EnvCom == "Biota", 
-                                   "3"),
+                                          EnvCom == "Biota", 
+                                          "3"),
          EXTRACTION_PROTOCOL_ID = replace(EXTRACTION_PROTOCOL_ID, 
-                                   EnvCom == "Sediment", 
-                                   "4"),
-         MEASURED_REFERENCE_ID = "1,5")
+                                          EnvCom == "Sediment", 
+                                          "4"),
+         MEASURED_REFERENCE_ID = "5",
+         DATA_TYPE_SUB = "KET",
+         DATA_TYPE = "",
+         ENTERED_DATE = "")
 
-
-
+final$MEASURED_VALUE<-gsub("<LOD","",final$MEASURED_VALUE)
+final$MEASURED_VALUE<-gsub("<LOQ","",final$MEASURED_VALUE)
 
 final <- final %>% 
-  mutate(ANALYTICAL_METHOD = replace(SAMPLING_METHOD,
-                                     SAMPLING_METHOD == "LVSPE",
-                                     "LCMS/MS and GCMS"),
-         ANALYTICAL_METHOD = replace(ANALYTICAL_METHOD,
-                                     SAMPLING_METHOD != "LVSPE",
-                                     "LCMS/MS and LCMS"),
-         MEASURED_REFERENCE_ID = "1,5")
+  mutate(ANALYTICAL_METHOD = "LCMS/MS",
+         MEASURED_REFERENCE_ID = "5",
+         FRACTION_PROTOCOL_ID = "5")
 
 final$LOD_VALUE[final$LOD_VALUE == 'Biota'] <- final$LOD_Biota
 final$LOD_VALUE[final$LOD_VALUE == 'Effluent wastewater'] <- final$LOD_w
@@ -264,12 +270,14 @@ RAdb$MEASURED_TYPE <- final$MEASURED_TYPE
 RAdb$STRESSOR_NAME <- final$STRESSOR_NAME
 RAdb$INCHIKEY_STANDARD <- final$INCHIKEY_STANDARD
 RAdb$MEASURED_VALUE <- final$MEASURED_VALUE
+RAdb$MEASURED_FLAG <- final$MEASURED_FLAG
 RAdb$MEASURED_UNIT <- final$MEASURED_UNIT
 RAdb$LOQ_VALUE <- final$LOQ_VALUE
 RAdb$LOQ_UNIT <- final$LOQ_UNIT
 RAdb$LOD_VALUE <- final$LOD_VALUE
 RAdb$LOD_UNIT <- final$LOD_UNIT
 RAdb$MEASURED_REFERENCE_ID <- final$MEASURED_REFERENCE_ID
+RAdb$FRACTION_PROTOCOL_ID <- final$FRACTION_PROTOCOL_ID
 RAdb$ORGANISATION <- final$ORGANISATION
 RAdb$ENTERED_BY <- final$ENTERED_BY
 RAdb$ENTERED_DATE <- final$ENTERED_DATE
